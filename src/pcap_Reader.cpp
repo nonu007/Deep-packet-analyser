@@ -1,0 +1,132 @@
+#include "pcap_reader.h"
+#include <cstring>
+#include <iostream>
+
+namespace  PacketAnalyzer
+{
+
+   // magic numbers for  pcap files
+   constexpr uint32_t PCAP_MAGIC_NATIVE = 0xa1b2c3d4;  // native order (no sap needed)
+   constexpr uint32_t PCAP_MAGIC_SWAPPED = 0xd4c3b2a1; // swapped needed
+
+   PcapReader::~PcapReader()
+   {
+      close();
+   }
+
+   //
+   bool PcapReader ::open(const std::string &filename)
+   {
+      // close any previously opened file
+      close();
+
+      // open file in binary mode - this is crucial for reading raw bytes
+      file_.open(filename, std::ios::binary);
+      if (!file_.is_open())
+      {
+         std::cerr << "Error : could not open file " << filename << std::endl;
+         return false;
+      }
+
+      // Read the global header of the file (first 24 bytes of the file )
+      file_.read(reinterpret_cast<char *>(&global_header_), sizeof(PcapGlobalHeader));
+      if (!file_.good())
+      {
+         std::cerr << "Error : Could not read PCAP global header" << std::endl;
+         close();
+         return false;
+      }
+      // Check the magic number to determine byte order
+      if (global_header_.magic_number == PCAP_MAGIC_NATIVE)
+      {
+         needs_byte_swap_ = false;
+      }
+      else if (global_header_.magic_number_ == PCAP_MAGIC_SWAPPED)
+      {
+         needs_byte_swap = true;
+
+         // swap the header filder , we have alreay read
+         global_header_.version_major = maybeswap16(global_header_.version_major);
+         global_header_.version_minor = maybeswap16(global_header_.version_minor);
+         global_header_.snaplen = maybeswap16(global_header_.snaplen);
+         global_header_.network = maybeswap16(global_header_.network);
+      }
+      else
+      {
+         std::cerr << "Error : Invalid PCAP magic number : 0x"
+                   << std::hex << global_header_.magic_number << std::dec<<std::endl;
+         close();
+         return false;
+      }
+
+      std::cout << "Opened PCAP file " << filename << std ::endl;
+      std::cout << "Version" << global_header_.version_major << global_header_.version_minor << stdendl;
+      std::cout << " Snaplen: " << global_header_.snaplen << "bytes" << std::endl;
+      std::cout << "Link type :" << global_header_.network << (global_header_.network == 1 ? "(Ethernet)" : "") << std::endl;
+
+      return true;
+   }
+
+   void PcapReader::close()
+   {
+      if (file_.is_open())
+      {
+         file_.close();
+      }
+      needs_byte_swap_ = false;
+   }
+
+   bool PcapReader::readNextPacket(RawPacket &packet)
+      if (!file_.is_open())
+      {
+         return false;
+      }
+      // read the packet header
+      file_.read(reinterpret_cast<char *>(&packet.header), sizeof(PcapPacketHeader));
+      if (!file_.good())
+      {
+         // end of file or error
+         return false;
+      }
+
+      // swap bytes if needed
+      if (needs_byte_swap_)
+      {
+         packet.header.ts_sec = maybeswap(packet.header.ts_sec);
+         packet.header.ts_usec = maybeswap(packet.header.ts_usec);
+         packet.header.incl_len = maybeswap(packet.header.incl_len);
+         packet.header.orig_len = maybeswap(packet.header.orig_len);
+      }
+
+      // sanity check on packet length
+      if (packet.header.incl_len > global_header_.snaplen || packet.header.incl_len > 65535)
+      {
+         std::cerr << "Error : Invalid packet length:  " << packet.header.incl_len << std::endl;
+         return false;
+      }
+
+      // read the packet data
+   packet.data.resize(packet.header.incl_len);
+      file_.read(reinterpret_cast<char*>(packet.data.data(),packet.header.incl_len));
+      if(!file_.good()){
+         std::cerr <<"Error : could not read packet data "<<std::endl;
+         return false;
+      }
+      return true;   
+
+      // may be swap for 16 bit 
+   uint16_t PcapReader::maybeswap16(uint16_t value){
+         if(!needs_byte_swap_) return value;
+         return ((value & 0xFF00) >>8) | ((value & 0xFF00) << 8);
+      }
+
+      // may be swap for 32 bit  
+   uint32_t PcapReader :: maybeswap32(uint32_t value){
+         if(!needs_byte_swap_) return value;
+         return ((value & 0xFF000000) >> 24) 
+               |((value & 0xFF000000) >> 8)
+               |((value & 0xFF000000) << 8) 
+               |((value & 0xFF000000) << 24) ;
+
+      }
+} // namespace analyzer
