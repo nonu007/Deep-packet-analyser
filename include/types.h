@@ -38,7 +38,7 @@ namespace DPI
         // Create reverse tuple (for matching bidirectional flows)
         FiveTuple reverse() const
         {
-            return {src_ip, src_port, dest_ip, dest_port, protocol};
+            return {dest_ip, src_ip, dest_port, src_port, protocol};
         }
 
         std ::string toString() const; // object ko human readable string me convert karne wala function
@@ -66,7 +66,7 @@ namespace DPI
     // ============================================================================
     // Application Classification
     // ============================================================================
- 
+
     // DPI ka brain hai — yahi decide karega packet kis app ka hai
     enum class AppType
     {
@@ -104,7 +104,7 @@ namespace DPI
     // Connection State
     // ============================================================================
 
-    //Enum ka use hota hai predefined named constants dene ke liye, taaki code readable, safe aur maintainable bane.
+    // Enum ka use hota hai predefined named constants dene ke liye, taaki code readable, safe aur maintainable bane.
     enum class ConnectionState
     {
         NEW,
@@ -114,93 +114,95 @@ namespace DPI
         BLOCKED,
     };
 
-// ============================================================================
-// Packet Action (what to do with the packet)
-// ============================================================================
+    // ============================================================================
+    // Packet Action (what to do with the packet)
+    // ============================================================================
 
-enum class PacketAction{
-    FORWARD,
-    DROP,
-    INSPECT,
-    LOG_ONLY
-};
+    enum class PacketAction
+    {
+        FORWARD,
+        DROP,
+        INSPECT,
+        LOG_ONLY
+    };
 
-// ============================================================================
-// Connection Entry (tracked per flow)
-// ============================================================================
+    // ============================================================================
+    // Connection Entry (tracked per flow)
+    // ============================================================================
 
-// Connection struct = ek poore network flow ka record hai
-//👉 DPI ka core yahi hai — har connection ka data yaha store hota hai
+    // Connection struct = ek poore network flow ka record hai
+    // 👉 DPI ka core yahi hai — har connection ka data yaha store hota hai
 
-struct Connection{
-    FiveTuple tuple;
-    ConnectionState state = ConnectionState::NEW;     // connection state => NEW, CONNECTED ETC.
-    AppType app_type = AppType::UNKNOWN; // apptype value default is UNKNOWN =0 and increase according to the give list. 
-    std::string sni; // Server Name Indification (if identified)
+    struct Connection
+    {
+        FiveTuple tuple;
+        ConnectionState state = ConnectionState::NEW; // connection state => NEW, CONNECTED ETC.
+        AppType app_type = AppType::UNKNOWN;          // apptype value default is UNKNOWN =0 and increase according to the give list.
+        std::string sni;                              // Server Name Indification (if identified)
 
-    // ek connection me kitna data aaya-gaya uska record   [ in	means internet → user    , out means	user → internet]
-    uint64_t packet_in =0; 
-    uint64_t packet_out =0;  // ========== in short : - connection me kitna traffic aaya-gaya uski ginti ========== 
-    uint64_t bytes_in =0;
-    uint64_t bytes_out =0;
-    
-    // connection kab start hua aur last packet kab aaya , ye sara time store krta hu 
-    std::chrono::steady_clock::time_point first_seen; 
-    std::chrono::steady_clock::time_point last_seen;
-    // std::time_p measure::clock type ::timestamp object first_seen / last_seen
+        // ek connection me kitna data aaya-gaya uska record   [ in	means internet → user    , out means	user → internet]
+        uint64_t packet_in = 0;
+        uint64_t packet_out = 0; // ========== in short : - connection me kitna traffic aaya-gaya uski ginti ==========
+        uint64_t bytes_in = 0;
+        uint64_t bytes_out = 0;
 
-    PacketAction action = PacketAction::FORWARD;
-    // means what we have to do by this packet 
+        // connection kab start hua aur last packet kab aaya , ye sara time store krta hu
+        std::chrono::steady_clock::time_point first_seen;
+        std::chrono::steady_clock::time_point last_seen;
+        // std::time_p measure::clock type ::timestamp object first_seen / last_seen
 
+        PacketAction action = PacketAction::FORWARD;
+        // means what we have to do by this packet
 
-    //for TCP state tracking  => Note :- TCP connection start hua, confirm hua, aur close hua ya nahi
-    bool syn_seen = false;  //   ---------> client ne connection start kiya ya nahi  ( call dial ki  ) 
-    bool syn_ack_seen = false; //      ---> server ne reply diya ya nahi  ( saamne wale ne uthaya  )
-    bool fin_seen = false ; // -----------> connection close hone laga ya nahi  ( call cut ki  ) 
-};
+        // for TCP state tracking  => Note :- TCP connection start hua, confirm hua, aur close hua ya nahi
+        bool syn_seen = false;     //   ---------> client ne connection start kiya ya nahi  ( call dial ki  )
+        bool syn_ack_seen = false; //      ---> server ne reply diya ya nahi  ( saamne wale ne uthaya  )
+        bool fin_seen = false;     // -----------> connection close hone laga ya nahi  ( call cut ki  )
+    };
 
-// ============================================================================
-// Packet wrapper for queue passing
-// ============================================================================
+    // ============================================================================
+    // Packet wrapper for queue passing
+    // ============================================================================
 
-struct packetJob{
-    uint32_t packet_id;
-    FiveTuple tuple;
-    std::vector<uint8_t>data;
-    size_t eth_offset = 0;
-    size_t ip_offset = 0;
-    size_t transport_offset =0;
-    size_t payload_offset =0;
-    size_t payload_length =0;
-    uint8_t tcp_flags =0;
-    const uint8_t* payload_data = nullptr;
+    struct packetJob
+    {
+        uint32_t packet_id;
+        FiveTuple tuple;
+        std::vector<uint8_t> data;
+        size_t eth_offset = 0;
+        size_t ip_offset = 0;
+        size_t transport_offset = 0;
+        size_t payload_offset = 0;
+        size_t payload_length = 0;
+        uint8_t tcp_flags = 0;
+        const uint8_t *payload_data = nullptr;
 
-    //timestamps 
-    uint32_t ts_sec;
-    uint32_t ts_usec;
+        // timestamps
+        uint32_t ts_sec;
+        uint32_t ts_usec;
+    };
 
-};
+    // ============================================================================
+    // Statistics - uses regular uint64_t, protected by mutex externally
+    // ============================================================================
 
-// ============================================================================
-// Statistics - uses regular uint64_t, protected by mutex externally
-// ============================================================================
+    // har packet ka overall count yahi track karega
+    struct DPIStats
+    {
+        std::atomic<uint64_t> total_packets{0};
+        std::atomic<uint64_t> total_bytes{0};
+        std::atomic<uint64_t> forwarded_packets{0};
+        std::atomic<uint64_t> dropped_packets{0};
+        std::atomic<uint64_t> tcp_packets{0};
+        std::atomic<uint64_t> udp_packets{0};
+        std::atomic<uint64_t> other_packets{0};
+        std::atomic<uint64_t> active_connections{0};
 
-// har packet ka overall count yahi track karega
-struct DPIStats {
-    std::atomic<uint64_t> total_packets{0};
-    std::atomic<uint64_t> total_bytes{0};
-    std::atomic<uint64_t> forwarded_packets{0};
-    std::atomic<uint64_t> dropped_packets{0};
-    std::atomic<uint64_t> tcp_packets{0};
-    std::atomic<uint64_t> udp_packets{0};
-    std::atomic<uint64_t> other_packets{0};
-    std::atomic<uint64_t> active_connections{0};
-    
-    // Non-copyable due to atomics
-    DPIStats() = default;
-    DPIStats(const DPIStats&) = delete;
-    DPIStats& operator=(const DPIStats&) = delete;
-};
+        // Non-copyable due to atomics
+        DPIStats() = default;
+        DPIStats(const DPIStats &) = delete;
+        DPIStats &operator=(const DPIStats &) = delete;
+    };
 
 } // namespace end
 
