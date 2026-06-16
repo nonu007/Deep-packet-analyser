@@ -1,209 +1,165 @@
 #ifndef DPI_TYPES_H
 #define DPI_TYPES_H
+
 #include <cstdint>
-#include <chrono>
 #include <string>
-#include <vector>
-#include <functional>
-#include <atomic>
-// #include <optional>
-namespace DPI
-{
-    // ============================================================================
-    // Five-Tuple: Uniquely identifies a connection/flow
-    // ============================================================================
+#include<vector>
+#include<functional>
+#include<chrono>
+#include<optional>
+#include<atomic>
 
-    // struct ka use hota hai multiple related data ko ek hi jagah group karne ke liye.
-    struct FiveTuple
-    {
+
+namespace DPI{
+
+    //==========================================================================
+    // FIve Tuple uniquly idenifies a connection / flow 
+    //==========================================================================
+
+    struct FiveTuple{
         uint32_t src_ip;
-        uint32_t dest_ip;
+        uint32_t dst_ip;
         uint16_t src_port;
-        uint16_t dest_port;
-        uint8_t protocol; // TCP = 6 , UDP = 17
-
-        bool operator==(const FiveTuple &other) const
-        { // flow identify
-            return src_ip == other.src_ip &&
-                   dest_ip == other.dest_ip &&
-                   src_port == other.src_port &&
-                   dest_port == other.dest_port &&
-                   protocol == other.protocol;
+        uint16_t dst_port;
+        uint8_t protocol;
+    
+    // equality check  => hashmap ke liye zaroori 
+        bool operator == (const FiveTuple & tuple ) const {
+             return 
+             src_ip == tuple.src_ip &&
+             src_port ==  tuple.src_port &&  
+             dst_ip == tuple.dst_ip &&
+             dst_port == tuple.dst_port &&
+            protocol == tuple.protocol;
         }
-        // operator== ==> operator overloading
-        // other = doosra object jisse compare karna hai
-        // & = reference (copy nahi banegi → fast)
-        // const = isko change nahi kar sakte
-
-        // Create reverse tuple (for matching bidirectional flows)
-        FiveTuple reverse() const
-        {
-            return {dest_ip, src_ip, dest_port, src_port, protocol};
+  // creating reverse tuple ( for directional matching flow )
+        FiveTuple reverse() const {
+            //  return { dst_ip, src_ip, dst_port, src_port, protocol }/
+              return { dst_ip,src_ip,dst_port,src_port, protocol };
         }
-
-        std ::string toString() const; // object ko human readable string me convert karne wala function
+        std::string toString() const ;
     };
 
-    // Hash function for FiveTuple (used for load balancing)
-    struct FiveTupleHash
-    {
-        size_t operator()(const FiveTuple &tuple) const
-        {
-            // simple but combining all fields for hashing
-            size_t h = 0; // for storing final hash
-            h ^= std::hash<uint32_t>{}(tuple.src_ip) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            h ^= std::hash<uint32_t>{}(tuple.dest_ip) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            h ^= std::hash<uint16_t>{}(tuple.src_port) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            h ^= std::hash<uint16_t>{}(tuple.dest_port) + 0x9e3779b9 + (h << 6) + (h >> 2);
-            h ^= std::hash<uint8_t>{}(tuple.protocol) + 0x9e3779b9 + (h << 6) + (h >> 2);
-
-            //  h XOR= std::hash<fixed_size_variable_type>{}(tuple.filed_name) + unique + (leftshift*6) + (rightshift/2);
-            // ex :- src_ip will be 1 after calculation hash and bfore hash it will be 1 then h^=1 will be  1^1 =0
-            return h; // return the value of fivetuplehash
+    // hash function for five tuple 
+    // because c++ do not know about how to do hash of FiveTuple 
+    struct FiveTupleHash{
+        size_t operator() (const FiveTuple &tuple) const{
+            
+     // basically we create a struct who helps to C++ to uderstand how to calcultae hash of FiveTuple 
+            size_t h =0;
+            h^= std::hash<uint32_t>{}(tuple.src_ip) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h^= std::hash<uint32_t>{}(tuple.dst_ip) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h^= std::hash<uint16_t>{}(tuple.src_port) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h^= std::hash<uint16_t>{}(tuple.dst_port) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            h^= std::hash<uint8_t>{}(tuple.protocol) + 0x9e3779b9 + (h << 6) + (h >> 2);
+            return h;
         }
     };
 
-    // ============================================================================
-    // Application Classification
-    // ============================================================================
+    //==========================================================================
+    // Application classifciation which ap i have to allow and blokc 
 
-    // DPI ka brain hai — yahi decide karega packet kis app ka hai
-    enum class AppType
-    {
-        UNKNOWN = 0,
-        HTTP,
-        HTTPS,
-        DNS,
-        TLS,
-        QUIC,
-        // Specific applications (detected via SNI)
-        ACEBOOK,
-        YOUTUBE,
-        TWITTER,
-        INSTAGRAM,
-        NETFLIX,
-        AMAZON,
-        MICROSOFT,
-        APPLE,
-        WHATSAPP,
-        TELEGRAM,
-        TIKTOK,
-        SPOTIFY,
-        ZOOM,
-        DISCORD,
-        GITHUB,
-        CLOUDFLARE,
-        APP_COUNT // Keep this last for counting
-    };
-    std::string AppTypetostring(AppType type);  // ye function convert karega: AppType → string
-    AppType sniAppType(const std::string &sni); // explanation 👇
-    // AppType app = AppType::YOUTUBE;
-    // std::string name = AppTypeToString(app);
+   enum class AppType {
+    UNKNOWN = 0, HTTP,HTTPS,DNS,TLS,
+    QUIC,GOOGLE,FACEBOOK,YOUTUBE,TWITTER,INSTAGRAM,NETFLIX,AMAZON,MICROSOFT,APPLE,WHATSAPP,
+    TELEGRAM,TIKTOK,SPOTIFY,ZOOM,DISCORD,GITHUB,CLOUDFLARE,
+    APP_COUNT,};
 
-    // ============================================================================
-    // Connection State
-    // ============================================================================
+    std::string appTypetoString(AppType appType);
+    AppType sniToAppType(const std::string &sni);
 
-    // Enum ka use hota hai predefined named constants dene ke liye, taaki code readable, safe aur maintainable bane.
-    enum class ConnectionState
-    {
-        NEW,
-        ESTABLISHED,
-        CLASSIFIED,
-        CLOSED,
-        BLOCKED,
-    };
+//============================================================================
+// Connection State
+// ============================================================================
 
-    // ============================================================================
-    // Packet Action (what to do with the packet)
-    // ============================================================================
+enum class ConnectionState{
+    NEW,
+    ESTABLISHED,
+    CLOSED,
+    CLASSIFIED,
+    BLOCKED
+};
 
-    enum class PacketAction
-    {
-        FORWARD,
-        DROP,
-        INSPECT,
-        LOG_ONLY
-    };
+//============================================================================
+// pACKET aCTION : WHAT TO DO NEXT WITH THIS PACKET 
+// ============================================================================
 
-    // ============================================================================
-    // Connection Entry (tracked per flow)
-    // ============================================================================
+enum class PacketAction{
+    FORWARD,    // SEND TO INTERNET 
+    DROP,       // BLOCK/DROP THE ACKET 
+    INSPECT,       // NEEDS FURTHER INSPECTION ( FOR EXAMPLE DEEP PACKET INSPECTION )
+    LOG_ONLY      // JUST LOG THE PACKET INFO WITHOUT TAKING ANY ACTION 
+};
 
-    // Connection struct = ek poore network flow ka record hai
-    // 👉 DPI ka core yahi hai — har connection ka data yaha store hota hai
+//============================================================================
+// Connection Entry tracked per flow in DPI engine 
+// ============================================================================
 
-    struct Connection
-    {
-        FiveTuple tuple;
-        ConnectionState state = ConnectionState::NEW; // connection state => NEW, CONNECTED ETC.
-        AppType app_type = AppType::UNKNOWN;          // apptype value default is UNKNOWN =0 and increase according to the give list.
-        std::string sni;                              // Server Name Indification (if identified)
+struct Connection {
+    FiveTuple tuple;
+    ConnectionState state = ConnectionState::NEW;
+    AppType appType = UNKNOWN;
+    std::string sni;
 
-        // ek connection me kitna data aaya-gaya uska record   [ in	means internet → user    , out means	user → internet]
-        uint64_t packet_in = 0;
-        uint64_t packet_out = 0; // ========== in short : - connection me kitna traffic aaya-gaya uski ginti ==========
-        uint64_t bytes_in = 0;
-        uint64_t bytes_out = 0;
+    uint64_t packet_in =0;
+    uint64_t packet_out =0;
+    uint64_t butes_in =0;
+    uint64_t bytes_out =0;
 
-        // connection kab start hua aur last packet kab aaya , ye sara time store krta hu
-        std::chrono::steady_clock::time_point first_seen;
-        std::chrono::steady_clock::time_point last_seen;
-        // std::time_p measure::clock type ::timestamp object first_seen / last_seen
+    std::chrono::steady_clock::time_point first_seen;
+    std::chrono::steady_clock::time_point last_seen; // for timeout and eviction
 
-        PacketAction action = PacketAction::FORWARD;
-        // means what we have to do by this packet
+    PacketAction action =  PacketAction::FORWARD; // default action is to forward the packet
 
-        // for TCP state tracking  => Note :- TCP connection start hua, confirm hua, aur close hua ya nahi
-        bool syn_seen = false;     //   ---------> client ne connection start kiya ya nahi  ( call dial ki  )
-        bool syn_ack_seen = false; //      ---> server ne reply diya ya nahi  ( saamne wale ne uthaya  )
-        bool fin_seen = false;     // -----------> connection close hone laga ya nahi  ( call cut ki  )
-    };
+    // for the TCP state tracking 
+    bool syn_seen = flase ;
+    bool syn_ack_seen = false;
+    bool fin_seen = flase;
+};
 
-    // ============================================================================
-    // Packet wrapper for queue passing
-    // ============================================================================
 
-    struct packetJob
-    {
-        uint32_t packet_id;
-        FiveTuple tuple;
-        std::vector<uint8_t> data;
-        size_t eth_offset = 0;
-        size_t ip_offset = 0;
-        size_t transport_offset = 0;
-        size_t payload_offset = 0;
-        size_t payload_length = 0;
-        uint8_t tcp_flags = 0;
-        const uint8_t *payload_data = nullptr;
+//=========================================================
+// Packet Wrapper for queue passing 
+//==========================================================
 
-        // timestamps
-        uint32_t ts_sec;
-        uint32_t ts_usec;
-    };
+struct PacketJob{
+    uint32_t packet_id;
+    FiveTuple tuple;
+    std::vector<uint8_t> data; // packet data for deep inspection
+    size_t eth_offset =0;  //Ethernet header ki starting position
+    //eth_offset = 0  => (mostly hamesha 0 hi hota hai — start se)
+    size_t ip_offset =0; // IP header ki starting position
+    //ip_offset = 14  =>  (kyunki Ethernet header 14 bytes ka hota hai)
+    size_t transport_offset =0;
+    size_t payload_offset =0;
+    size_t payload_length =0;
+    uint8_t tcp_flags =0; // for TCP packet state tracking
+    const uint8_t* payload_data = nullptr; // pointer to the payload data for direct access during inspection
 
-    // ============================================================================
-    // Statistics - uses regular uint64_t, protected by mutex externally
-    // ============================================================================
+    // timestamps
+    uint32_t timestamp_sec;
+    uint32_t timestamp_usec;
 
-    // har packet ka overall count yahi track karega
-    struct DPIStats
-    {
-        std::atomic<uint64_t> total_packets{0};
-        std::atomic<uint64_t> total_bytes{0};
-        std::atomic<uint64_t> forwarded_packets{0};
-        std::atomic<uint64_t> dropped_packets{0};
-        std::atomic<uint64_t> tcp_packets{0};
-        std::atomic<uint64_t> udp_packets{0};
-        std::atomic<uint64_t> other_packets{0};
-        std::atomic<uint64_t> active_connections{0};
+};
 
-        // Non-copyable due to atomics
-        DPIStats() = default;
-        DPIStats(const DPIStats &) = delete;
-        DPIStats &operator=(const DPIStats &) = delete;
-    };
+// ============================================================================
+// Statistics - uses regular uint64_t, protected by mutex externally
+// ============================================================================
+struct DPIStats {
+    std::atomic<uint64_t> total_packets{0};
+    std::atomic<uint64_t> total_bytes{0};
+    std::atomic<uint64_t> forwarded_packets{0};
+    std::atomic<uint64_t> dropped_packets{0};
+    std::atomic<uint64_t> tcp_packets{0};
+    std::atomic<uint64_t> udp_packets{0};
+    std::atomic<uint64_t> other_packets{0};
+    std::atomic<uint64_t> active_connections{0};
+    
+    // Non-copyable due to atomics
+    DPIStats() = default;
+    DPIStats(const DPIStats&) = delete;
+    DPIStats& operator=(const DPIStats&) = delete;
+};
 
-} // namespace end
-
-#endif // end of DPI_TYPES
+} // namespace DPI
+#endif //DPI_TYPES_H
