@@ -3,7 +3,7 @@
 #include <cstdint>   // for use of fixed widh  integer types  ( ex , uint32_t,uint16_t....) 
 
 // "Har computer bytes alag order mein store karta hai — ye file us problem ko solve karti hai.
-namespace portableNet{
+namespace PortableNet{
 
 // agar alue recieved 16 bytes the this way me conversion hoga 
 inline uint16_t swapBytes16(uint16_t value){

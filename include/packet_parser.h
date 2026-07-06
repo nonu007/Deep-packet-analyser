@@ -92,5 +92,56 @@ namespace PacketAnalyzer
     size_t payload_length;
     const uint8_t* payload_data = nullptr;  // Points into original packet
     };
+
+    // class to parse raw packets 
+    class PacketParser{
+        private:
+            static bool parseEthernet(const uint8_t* data, size_t len, ParsedPacket& packet, size_t& offset);
+            static bool parseIPV4(const uint8_t* data, size_t len, ParsedPacket& packet, size_t& offset);
+            static bool parseTCP(const uint8_t* data, size_t len, ParsedPacket& packet, size_t& offset);
+            static bool parseUDP(const uint8_t* data, size_t len, ParsedPacket& packet, size_t& offset);
+        
+            public: 
+            // Parse a raw packet and fill in the ParsedPacket structure
+              static bool parse(const RawPacket& raw,ParsedPacket& parsed);
+            
+            // Helper functions to convert to human-readable strings
+            static std::string macToString(const uint8_t* mac);
+            static std::string ipToString(uint32_t ip);
+            static std::string protocolToString(uint8_t protocol);
+            static std::string tcpFlagsToString(uint8_t flags);
+       
+    };
+
+// main flow 
+// andar kya hota hai:
+//              parse()
+//                            → parseEthernet() → offset=14 → parsed.src_mac, dst_mac set
+//                            → parseIPv4()  → offset=34 → parsed.src_ip, dst_ip set
+//                            → parseTCP() → offset=54 → parsed.src_port, dst_port set
+//                             ya
+//                            → parseUDP() → offset=42 → parsed.src_port, dst_port set
+
+// TCP flags constraints
+namespace TCPflags{
+    // TCP connection mein har packet ek signal carry karta hai — flag ke zariye.
+    constexpr uint8_t FIN = 0x01;  // 0x01 = 00000001 = FIN → "Connection band karo"    
+    constexpr uint8_t SYN = 0x02;  // 0x02 = 00000010 = SYN → "Connection shuru karo"
+    constexpr uint8_t RST = 0x04;  // 0x04 = 00000100 = RST → "Reset — kuch gadbad hai"
+    constexpr uint8_t PSH = 0x08;  // 0x08 = 00001000 = PSH → "Data abhi bhejo, wait mat karo"
+    constexpr uint8_t ACK = 0x10;  // 0x10 = 00010000 = ACK → "Mila, confirm hai"
+    constexpr uint8_t URG = 0x20;  // 0x20 = 00100000 = URG → "Urgent data hai"
+};
+
+namespace Protocol{
+    constexpr uint8_t ICMP = 1;   // Internet Control Message Protocol
+    constexpr uint8_t TCP = 6;    // Transmission Control Protocol
+    constexpr uint8_t UDP = 17;   // User Datagram Protocol
+};
+namespace EtherType{
+    constexpr uint16_t IPv4 = 0x0800; // Internet Protocol version 4
+    constexpr uint16_t ARP = 0x0806;  // Address Resolution Protocol
+    constexpr uint16_t IPv6 = 0x86DD; // Internet Protocol version 6
+};
 };
 #endif
